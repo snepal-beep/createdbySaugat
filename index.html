@@ -7,30 +7,35 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Cinzel:wght@400;500;700&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 
-<!-- Firebase Compat SDK -->
+<!-- Firebase Compat SDK v9 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
-firebase.initializeApp({
-  apiKey: "AIzaSyCccKGBYdJQLTPYZojzpNr_f8Dc80lm6a8",
-  authDomain: "oscars26ballot.firebaseapp.com",
-  databaseURL: "https://oscars26ballot-default-rtdb.firebaseio.com",
-  projectId: "oscars26ballot",
-  storageBucket: "oscars26ballot.firebasestorage.app",
-  messagingSenderId: "671084169649",
-  appId: "1:671084169649:web:961b802aa3768b4c201590"
-});
-const _db = firebase.database();
-window._fb = {
-  db: _db,
-  ref:    (db, path) => db.ref(path),
-  set:    (r, v)     => r.set(v),
-  get:    (r)        => r.get(),
-  onValue:(r, cb)    => { r.on('value', snap => cb(snap)); return () => r.off('value'); },
-  update: (r, v)     => r.update(v),
-  remove: (r)        => r.remove()
-};
-window._fbReady = true;
+try {
+  firebase.initializeApp({
+    apiKey: "AIzaSyCccKGBYdJQLTPYZojzpNr_f8Dc80lm6a8",
+    authDomain: "oscars26ballot.firebaseapp.com",
+    databaseURL: "https://oscars26ballot-default-rtdb.firebaseio.com",
+    projectId: "oscars26ballot",
+    storageBucket: "oscars26ballot.firebasestorage.app",
+    messagingSenderId: "671084169649",
+    appId: "1:671084169649:web:961b802aa3768b4c201590"
+  });
+  const _db = firebase.database();
+  window._fb = {
+    db: _db,
+    ref:    (db, path) => db.ref(path),
+    set:    (r, v)     => r.set(v),
+    get:    (r)        => r.get(),
+    onValue:(r, cb)    => { r.on('value', snap => cb(snap)); return () => r.off('value'); },
+    update: (r, v)     => r.update(v),
+    remove: (r)        => r.remove()
+  };
+  window._fbReady = true;
+} catch(e) {
+  window._fbInitError = e.message;
+  console.error('Firebase init failed:', e);
+}
 </script>
 
 <style>
@@ -712,7 +717,9 @@ function fb() { return window._fb; }
 function dbRef(path) { return fb().ref(fb().db, path); }
 
 function waitForFb(cb) {
-  cb(); // compat SDK loads synchronously — always ready
+  cb(); // compat SDK is synchronous
+}
+  window.addEventListener('fbReady', cb, { once: true });
 }
 
 // ══════════════════════════════════════════════
@@ -723,6 +730,9 @@ function waitForFb(cb) {
   const params = new URLSearchParams(window.location.search);
   const rc = params.get('room');
   if (rc) document.getElementById('roomCodeInput').value = rc.toUpperCase();
+  if (window._fbInitError) {
+    document.getElementById('setupError').textContent = '⚠ Firebase error: ' + window._fbInitError;
+  }
 })();
 
 async function tryJoin() {
@@ -736,14 +746,19 @@ async function tryJoin() {
   if (!name) { errEl.textContent = 'Please enter your name.'; return; }
   errEl.textContent = '';
 
-  // Show spinner while connecting
+  if (!window._fb) {
+    errEl.textContent = window._fbInitError
+      ? '⚠ Firebase error: ' + window._fbInitError
+      : '⚠ Firebase not loaded — check your connection and refresh.';
+    return;
+  }
+
   document.getElementById('loadingScreen').classList.remove('hidden');
 
-  waitForFb(async () => {
+  try {
     myName = name;
 
     if (!code) {
-      // Create new room
       roomCode = generateCode();
       isHost = true;
       await fb().set(dbRef(`rooms/${roomCode}`), {
@@ -752,16 +767,13 @@ async function tryJoin() {
         players: { [myName]: { name: myName, submitted: false, picks: {} } },
         winners: {}
       });
-      // Show share info — hide spinner first
       document.getElementById('loadingScreen').classList.add('hidden');
       document.getElementById('setupForm').style.display = 'none';
       document.getElementById('createdRoomInfo').style.display = 'block';
       document.getElementById('newRoomCodeDisplay').textContent = roomCode;
       const link = `${location.origin}${location.pathname}?room=${roomCode}`;
       document.getElementById('shareLinkDisplay').textContent = link;
-      document.getElementById('setupError').textContent = '';
     } else {
-      // Join existing room
       roomCode = code;
       const snap = await fb().get(dbRef(`rooms/${roomCode}`));
       if (!snap.exists()) {
@@ -771,22 +783,24 @@ async function tryJoin() {
       }
       const data = snap.val();
       isHost = (data.host === myName);
-      // Add player if new
       if (!data.players || !data.players[myName]) {
         await fb().update(dbRef(`rooms/${roomCode}/players/${myName}`), {
           name: myName, submitted: false, picks: {}
         });
       } else {
-        // Restore existing picks
         myPicks = data.players[myName].picks || {};
         isSubmitted = data.players[myName].submitted || false;
       }
       enterApp();
     }
-  });
+  } catch(err) {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    errEl.textContent = '⚠ Error: ' + err.message;
+    console.error('tryJoin failed:', err);
+  }
 }
 
-async function tryCreate() { await tryJoin(); }
+async function tryCreateasync function tryCreate() { await tryJoin(); }
 
 function enterApp() {
   document.getElementById('loadingScreen').classList.add('hidden');
