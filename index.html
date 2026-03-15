@@ -719,8 +719,6 @@ function dbRef(path) { return fb().ref(fb().db, path); }
 function waitForFb(cb) {
   cb(); // compat SDK is synchronous
 }
-  window.addEventListener('fbReady', cb, { once: true });
-}
 
 // ══════════════════════════════════════════════
 // SETUP / ROOM
